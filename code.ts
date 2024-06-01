@@ -1,65 +1,83 @@
 figma.showUI(__html__);
 
-figma.ui.resize(500,500);
 
-figma.ui.onmessage = async (pluginMessage) => {
+figma.ui.onmessage = async (msg) => {
+  if (msg.type === 'apply-css') {
+    const cssUrl = msg.cssUrl;
+    try {
+      console.log("Loading all pages...");
+      await figma.loadAllPagesAsync();
+      console.log("All pages loaded.");
 
-  await figma.loadFontAsync({ family: "Rubik", style: "Regular"});
+      const response = await fetch(cssUrl);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const cssText = await response.text();
+      const cssRules = parseCSS(cssText);
 
-  const nodes:SceneNode[] = [];
-  
-// I ended up adding this line because of the error that was returning in the next line (When using the dynamic-page manifest field, remember to call figma.loadAllPagesAsync() before using DocumentNode.findOne(). loadAllPagesAsync() only needs to be called once. ), but I need to be careful when using this on large files
-  // await figma.loadAllPagesAsync();  
-
-  const postComponentSet = figma.root.findOne(node => node.type == "COMPONENT_SET" && node.name == "post") as ComponentSetNode;
-
-  let selectedVariant;
-
-  console.log(pluginMessage.imageVariant);
-
-  if(pluginMessage.darkModeState === true){
-    switch(pluginMessage.imageVariant) {
-      case "2" :
-        selectedVariant = postComponentSet.findOne(node => node.type == "COMPONENT" && node.name == "Image=single, Dark mode=true") as ComponentNode;
-        break;
-      case "3" :
-        selectedVariant = postComponentSet.findOne(node => node.type == "COMPONENT" && node.name == "Image=carousel, Dark mode=true") as ComponentNode;
-        break;
-      default :
-        selectedVariant = postComponentSet.findOne(node => node.type == "COMPONENT" && node.name == "Image=none, Dark mode=true") as ComponentNode;
-        break;
+      const allPages = figma.root.children as PageNode[];
+      for (const page of allPages) {
+        applyCSSRulesToNodes(cssRules, [...page.children]);
+      }
+      
+      figma.notify("CSS definitions applied to all pages.");
+    } catch (error) {
+      figma.notify("Failed to fetch or apply CSS.");
+      console.error(error);
     }
-  } else {
-    switch(pluginMessage.imageVariant) {
-      case "2" :
-        selectedVariant = postComponentSet.findOne(node => node.type == "COMPONENT" && node.name == "Image=single, Dark mode=false") as ComponentNode;
-        break;
-      case "3" :
-        selectedVariant = postComponentSet.findOne(node => node.type == "COMPONENT" && node.name == "Image=carousel, Dark mode=false") as ComponentNode;
-        break;
-        default :
-        selectedVariant = postComponentSet.defaultVariant as ComponentNode;
-        break;
-    }
+
+    figma.closePlugin();
   }
+};
 
-  const newPost = selectedVariant.createInstance();
+interface CSSRules {
+  [selector: string]: {
+    [property: string]: string;
+  };
+}
 
-  const templateName = newPost.findOne(node => node.name == "displayName" && node.type == "TEXT") as TextNode;
-  const templateUsername = newPost.findOne(node => node.name == "@username" && node.type == "TEXT") as TextNode;
-  const templateDescription = newPost.findOne(node => node.name == "description" && node.type == "TEXT") as TextNode;
-  const numLikes = newPost.findOne(node => node.name == "likesLabel" && node.type == "TEXT") as TextNode;
-  const numComments = newPost.findOne(node => node.name == "commentsLabel" && node.type == "TEXT") as TextNode;
+function parseCSS(cssText: string): CSSRules {
+  const rules: CSSRules = {};
+  const css = cssText.split('}');
+  css.forEach(rule => {
+    const [selectors, properties] = rule.split('{');
+    if (!selectors || !properties) return;
+    selectors.split(',').forEach(selector => {
+      const cleanSelector = selector.trim();
+      if (!rules[cleanSelector]) rules[cleanSelector] = {};
+      properties.split(';').forEach(property => {
+        const [prop, value] = property.split(':');
+        if (prop && value) {
+          rules[cleanSelector][prop.trim()] = value.trim();
+        }
+      });
+    });
+  });
+  return rules;
+}
 
-  templateName.characters = pluginMessage.name;
-  templateUsername.characters = pluginMessage.username;
-  templateDescription.characters = pluginMessage.description;
-  numLikes.characters = (Math.floor(Math.random() * 1000) + 1).toString();
-  numComments.characters = (Math.floor(Math.random() * 1000) + 1).toString();
+function applyCSSRulesToNodes(cssRules: CSSRules, nodes: SceneNode[]) {
+  nodes.forEach(node => {
+    // Apply CSS rules to the node
+    if ('fills' in node && cssRules['body']) {
+      const fills = cssRules['body']['background-color'];
+      if (fills) {
+        node.fills = [{ type: 'SOLID', color: hexToRgb(fills) }];
+      }
+    }
+    if ('fontSize' in node && cssRules['body']) {
+      const fontSize = cssRules['body']['font-size'];
+      if (fontSize) {
+        node.fontSize = parseInt(fontSize);
+      }
+    }
+    // More mappings will be added as needed, I only have these to test
+  });
+}
 
-  nodes.push(newPost);
-
-  figma.viewport.scrollAndZoomIntoView(nodes);
-
-  figma.closePlugin();
+function hexToRgb(hex: string) {
+  const bigint = parseInt(hex.slice(1), 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return { r: r / 255, g: g / 255, b: b / 255 };
 }

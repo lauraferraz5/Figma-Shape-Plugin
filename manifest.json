@@ -3,8 +3,22 @@
   "id": "1373485645975238005",
   "api": "1.0.0",
   "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
   "editorType": [
     "figma"
   ],
-  "ui": "ui.html"
+  "menu": [
+    {
+      "name": "Apply CSS",
+      "command": "apply-css"
+    }
+  ],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
 }
