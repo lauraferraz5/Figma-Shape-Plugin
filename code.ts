@@ -1,27 +1,22 @@
 figma.showUI(__html__);
 
-
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === 'apply-css') {
+  if (msg.type === "apply-css") {
     const cssUrl = msg.cssUrl;
+
+    const identifier = extractIdentifier(cssUrl);
+    const kodekitUrl = `https://api.kodekit.io/api/GetKit`;
+
     try {
       console.log("Loading all pages...");
       await figma.loadAllPagesAsync();
       console.log("All pages loaded.");
 
-      const response = await fetch(cssUrl);
-      console.log("Response fetch URL -> ", response);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const json = await response.json()
-      console.log("json response -> ", json);
-      const cssText = await response.text();
-      const cssRules = parseCSS(cssText);
+      const kodekitData = await fetchKodekitKit(kodekitUrl, identifier);
+      console.log("Kodekit data -> ", kodekitData);
 
-      const allPages = figma.root.children as PageNode[];
-      for (const page of allPages) {
-        applyCSSRulesToNodes(cssRules, [...page.children]);
-      }
-      
+      applyStylesToLayers(kodekitData.styles);      
+
       figma.notify("CSS definitions applied to all pages.");
     } catch (error) {
       figma.notify("Failed to fetch or apply CSS.");
@@ -32,55 +27,79 @@ figma.ui.onmessage = async (msg) => {
   }
 };
 
-interface CSSRules {
-  [selector: string]: {
-    [property: string]: string;
-  };
+function extractIdentifier(cssUrl: string): string {
+  const urlParts = cssUrl.split("/");
+  const cssFileName = urlParts[urlParts.length - 1];
+  const identifier = cssFileName.replace(".css", "");
+  return identifier;
 }
 
-function parseCSS(cssText: string): CSSRules {
-  const rules: CSSRules = {};
-  const css = cssText.split('}');
-  css.forEach(rule => {
-    const [selectors, properties] = rule.split('{');
-    if (!selectors || !properties) return;
-    selectors.split(',').forEach(selector => {
-      const cleanSelector = selector.trim();
-      if (!rules[cleanSelector]) rules[cleanSelector] = {};
-      properties.split(';').forEach(property => {
-        const [prop, value] = property.split(':');
-        if (prop && value) {
-          rules[cleanSelector][prop.trim()] = value.trim();
-        }
-      });
-    });
+// First code that worked
+// async function fetchKodekitKit(url: string, identifier: string): Promise<unknown> {
+//   const requestBody = JSON.stringify(identifier);
+//   console.log("Request body:", requestBody);
+
+//   const response = await fetch(url, {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json",
+//     },
+//     body: requestBody,
+//   });
+//   console.log("Response fetchKodekitKit -> ", response);
+
+//   if (!response.ok) {
+//     throw new Error("Network response was not ok");
+//   }
+
+//   const responseData = await response.json();
+//   console.log("Response data:", responseData);
+
+//   return responseData;
+// }
+
+async function fetchKodekitKit(url: string, identifier: string): Promise<{ styles: Record<string, Record<string, string | number>> }> {
+  const requestBody = JSON.stringify(identifier);
+  console.log("Request body:", requestBody);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: requestBody,
   });
-  return rules;
+  console.log("Response fetchKodekitKit -> ", response);
+
+  if (!response.ok) {
+    throw new Error("Network response was not ok");
+  }
+
+  const responseData = await response.json();
+  console.log("Response data:", responseData);
+
+  return responseData;
 }
 
-function applyCSSRulesToNodes(cssRules: CSSRules, nodes: SceneNode[]) {
-  nodes.forEach(node => {
-    // Apply CSS rules to the node
-    if ('fills' in node && cssRules['body']) {
-      const fills = cssRules['body']['background-color'];
-      if (fills) {
-        node.fills = [{ type: 'SOLID', color: hexToRgb(fills) }];
+function applyStylesToLayers(styles: Record<string, Record<string, string | number>>) {
+  const allPages = figma.root.children as PageNode[];
+  for (const page of allPages) {
+    const layers = page.findAll(node => "name" in node && node.name in styles) as SceneNode[];
+    for (const layer of layers) {
+      const style = styles[layer.name];
+      for (const property in style) {
+        layer.setPluginData(property, style[property].toString());
       }
     }
-    if ('fontSize' in node && cssRules['body']) {
-      const fontSize = cssRules['body']['font-size'];
-      if (fontSize) {
-        node.fontSize = parseInt(fontSize);
-      }
-    }
-    // More mappings will be added as needed, I only have these to test
-  });
+  }
 }
 
-function hexToRgb(hex: string) {
-  const bigint = parseInt(hex.slice(1), 16);
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return { r: r / 255, g: g / 255, b: b / 255 };
-}
+// interface Kit {
+//   styles: {
+//     [selector: string]: {
+//       [property: string]: string | number;
+//     };
+//   };
+//   // Outras propriedades do kit podem ser adicionadas aqui conforme necessário
+// }
+
