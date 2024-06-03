@@ -10,7 +10,10 @@ figma.ui.onmessage = async (msg) => {
       console.log("All pages loaded.");
 
       const response = await fetch(cssUrl);
+      console.log("Response fetch URL -> ", response);
       if (!response.ok) throw new Error('Network response was not ok');
+      const json = await response.json()
+      console.log("json response -> ", json);
       const cssText = await response.text();
       const cssRules = parseCSS(cssText);
 

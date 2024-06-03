@@ -17,8 +17,10 @@
   ],
   "ui": "ui.html",
   "networkAccess": {
-    "allowedDomains": [
-      "none"
-    ]
+    "allowedDomains": [      
+      "https://api.kodekit.io"
+    ],
+    "reasoning": "This plugin gets CSS definitions from Kodekit and imports it into Figma",
+    "devAllowedDomains": []
   }
 }

@@ -2,7 +2,7 @@
   <button id="applyButton">Apply CSS</button>
   <script>
     document.getElementById('applyButton').onclick = () => {
-      const cssUrl = document.getElementById('cssUrl').value;
+      const cssUrl = document.getElementById('cssUrl').value;      
       parent.postMessage({ pluginMessage: { type: 'apply-css', cssUrl } }, '*');
     };
   </script>
