@@ -9,18 +9,13 @@
   "editorType": [
     "figma"
   ],
-  "menu": [
-    {
-      "name": "Apply CSS",
-      "command": "apply-css"
-    }
-  ],
   "ui": "ui.html",
   "networkAccess": {
     "allowedDomains": [      
-      "https://api.kodekit.io"
+      "https://api.kodekit.io",
+      "https://kodekit-api-laura.azurewebsites.net"
     ],
-    "reasoning": "This plugin gets CSS definitions from Kodekit and imports it into Figma",
+    "reasoning": "This plugin gets style definitions from Kodekit and imports it into Figma",
     "devAllowedDomains": []
   }
 }

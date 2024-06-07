@@ -1,21 +1,27 @@
 figma.showUI(__html__);
 
 figma.ui.onmessage = async (msg) => {
-  if (msg.type === "apply-css") {
+  if (msg.type === "apply-styles") {
+    await figma.loadFontAsync({ family: "Inter", style: "Regular" });  // It's important to know that any time we are changing the contents of a text node, we first need to load the font that the text node is using, that's why I have this line
+
     const cssUrl = msg.cssUrl;
 
     const identifier = extractIdentifier(cssUrl);
-    const kodekitUrl = `https://api.kodekit.io/api/GetKit`;
+
+    // Production Kodekit URL
+    // const kodekitUrl = `https://api.kodekit.io/api/GetKitCurrentRevision`;
+
+    const currentRevisionURL = `https://kodekit-api-laura.azurewebsites.net/publicapi/GetKitCurrentRevision`;
 
     try {
-      console.log("Loading all pages...");
-      await figma.loadAllPagesAsync();
-      console.log("All pages loaded.");
+      // console.log("Loading all pages...");
+      await figma.loadAllPagesAsync();        // check if it is really necessary to load all pages
+      // console.log("All pages loaded.");
 
-      const kodekitData = await fetchKodekitKit(kodekitUrl, identifier);
-      console.log("Kodekit data -> ", kodekitData);
+      const currentRevision = await fetchCurrentKitRevision(currentRevisionURL, identifier);
+      // console.log("Related Kits -> ", currentRevision);
 
-      applyStylesToLayers(kodekitData.styles);      
+      await applyStyles(currentRevision);
 
       figma.notify("CSS definitions applied to all pages.");
     } catch (error) {
@@ -34,72 +40,109 @@ function extractIdentifier(cssUrl: string): string {
   return identifier;
 }
 
-// First code that worked
-// async function fetchKodekitKit(url: string, identifier: string): Promise<unknown> {
-//   const requestBody = JSON.stringify(identifier);
-//   console.log("Request body:", requestBody);
-
-//   const response = await fetch(url, {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: requestBody,
-//   });
-//   console.log("Response fetchKodekitKit -> ", response);
-
-//   if (!response.ok) {
-//     throw new Error("Network response was not ok");
-//   }
-
-//   const responseData = await response.json();
-//   console.log("Response data:", responseData);
-
-//   return responseData;
-// }
-
-async function fetchKodekitKit(url: string, identifier: string): Promise<{ styles: Record<string, Record<string, string | number>> }> {
+async function fetchCurrentKitRevision(url: string, identifier: string) {
   const requestBody = JSON.stringify(identifier);
-  console.log("Request body:", requestBody);
+  // console.log("Request body for related kits:", requestBody);
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: requestBody,
+    body: requestBody,    
   });
-  console.log("Response fetchKodekitKit -> ", response);
+  // console.log("Response fetchCurrentKitRevision  -> ", response);
 
   if (!response.ok) {
     throw new Error("Network response was not ok");
   }
 
   const responseData = await response.json();
-  console.log("Response data:", responseData);
+  // console.log("Response data for current kit revision:", responseData);
 
   return responseData;
 }
 
-function applyStylesToLayers(styles: Record<string, Record<string, string | number>>) {
-  const allPages = figma.root.children as PageNode[];
-  for (const page of allPages) {
-    const layers = page.findAll(node => "name" in node && node.name in styles) as SceneNode[];
-    for (const layer of layers) {
-      const style = styles[layer.name];
-      for (const property in style) {
-        layer.setPluginData(property, style[property].toString());
-      }
-    }
+interface Color {
+  name: string;
+  value: {
+    hexValue: string;
+  };
+}
+
+interface Font {
+  family: string;
+  size: {
+    value: number;
+  };
+  lineHeight: {
+    value: number;
+    unit: string;
+  };
+}
+
+interface TextStyleData {
+  font: Font;
+}
+
+interface CurrentRevision {
+  colors: Color[];
+  headings: TextStyleData;
+  paragraphs: TextStyleData;
+  buttons: TextStyleData;
+  inputs: TextStyleData;
+}
+
+async function applyColors(colors: Color[]) {
+  // console.log("Applying colors:", colors);
+  for (const color of colors) {
+    const paintStyle = figma.createPaintStyle();
+    paintStyle.name = color.name;
+    paintStyle.paints = [{
+      type: 'SOLID',
+      color: hexToRgb(color.value.hexValue)
+    }];
+    // console.log("Paint style created:", paintStyle);
   }
 }
 
-// interface Kit {
-//   styles: {
-//     [selector: string]: {
-//       [property: string]: string | number;
-//     };
-//   };
-//   // Outras propriedades do kit podem ser adicionadas aqui conforme necessário
-// }
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const bigint = parseInt(hex.replace('#', ''), 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return { r: r / 255, g: g / 255, b: b / 255 };
+}
+
+async function applyTextStyles(textStyleData: TextStyleData, type: string) {
+  // console.log("Applying text styles:", textStyleData);
+  const font = textStyleData.font;
+  if (!font || !font.family || !font.size) return;
+
+  const fontPromises: Promise<void>[] = [];
+
+  if (font) {
+    fontPromises.push(figma.loadFontAsync({ family: font.family, style: "Regular" }));
+  }
+
+  await Promise.all(fontPromises);
+
+  const textStyle = figma.createTextStyle();
+  textStyle.name = `${type}-${font.family}`;
+  textStyle.fontSize = font.size.value;
+  textStyle.fontName = { family: font.family, style: "Regular" };
+  textStyle.lineHeight = { value: font.lineHeight.value, unit: font.lineHeight.unit === "px" ? "PIXELS" : "PERCENT" };
+  // Add other text style attributes here if necessary
+
+  // console.log("Text style created:", textStyle);
+}
+
+async function applyStyles(currentRevision: CurrentRevision) {
+  console.log("Applying styles:", currentRevision);
+  await applyColors(currentRevision.colors);
+  await applyTextStyles(currentRevision.headings, "heading");
+  await applyTextStyles(currentRevision.paragraphs, "paragraph");
+  await applyTextStyles(currentRevision.buttons, "button");
+  await applyTextStyles(currentRevision.inputs, "input");
+}
 

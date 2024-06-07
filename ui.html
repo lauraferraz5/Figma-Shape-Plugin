@@ -1,8 +1,8 @@
-<input type="text" id="cssUrl" placeholder="Enter CSS URL" />
-  <button id="applyButton">Apply CSS</button>
+<input type="text" id="cssUrl" placeholder="Enter Kodekit Kit URL" />
+  <button id="applyButton">Apply Styles</button>
   <script>
     document.getElementById('applyButton').onclick = () => {
       const cssUrl = document.getElementById('cssUrl').value;      
-      parent.postMessage({ pluginMessage: { type: 'apply-css', cssUrl } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'apply-styles', cssUrl } }, '*');
     };
   </script>
